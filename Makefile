@@ -1,9 +1,15 @@
 GO_CMD = go
 GO_TEST = $(GO_CMD) test
+GO_TOOL = $(GO_CMD) tool
+GO_TOOL_COVER = $(GO_TOOL) cover
 
 .PHONY: test
 test:
-	$(GO_TEST) -v ./...
+	$(GO_TEST) -v -coverprofile=c.out ./...
+
+.PHONY: cover
+cover: test
+	$(GO_TOOL_COVER) -html=c.out
 
 .PHONY: fuzz
 fuzz:
