@@ -123,6 +123,8 @@ var ValidUnits = []string{
 	"exbibyte", "exbibytes", "zebibyte", "zebibytes", "yobibyte", "yobibytes", "ronnibyte", "ronnibytes", "quettibyte", "quettibytes",
 }
 
+// IsValidUnit checks if the provided unit string is a valid unit for
+// parsing byte sizes.
 func IsValidUnit(unit string) bool {
 	unit = strings.ToLower(strings.TrimSpace(unit))
 	return slices.Contains(ValidUnits, unit)
@@ -381,9 +383,12 @@ func WithFormatString(formatStr string) FormatOption {
 func WithForcedUnit(unit Bytes) FormatOption {
 	return func(opts *formatOptions) error {
 		switch unit {
-		case B, KB, MB, GB, TB, PB, EB, ZB, YB, RB, QB,
-			KiB, MiB, GiB, TiB, PiB, EiB, ZiB, YiB, RiB, QiB:
-			// Valid unit
+		case B, KB, MB, GB, TB, PB, EB, ZB, YB, RB, QB:
+			opts.decimalUnits = true
+			opts.forcedUnitType = &unit
+			return nil
+		case KiB, MiB, GiB, TiB, PiB, EiB, ZiB, YiB, RiB, QiB:
+			opts.decimalUnits = false
 			opts.forcedUnitType = &unit
 			return nil
 		default:

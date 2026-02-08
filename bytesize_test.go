@@ -5,6 +5,123 @@ import (
 	"testing"
 )
 
+// TestIsValidUnit tests the IsValidUnit function with various unit strings
+func TestIsValidUnit(t *testing.T) {
+	tests := []struct {
+		unit     string
+		expected bool
+		name     string
+	}{
+		// Valid short decimal units
+		{"b", true, "byte"},
+		{"kb", true, "kilobyte"},
+		{"mb", true, "megabyte"},
+		{"gb", true, "gigabyte"},
+		{"tb", true, "terabyte"},
+		{"pb", true, "petabyte"},
+		{"eb", true, "exabyte"},
+		{"zb", true, "zettabyte"},
+		{"yb", true, "yottabyte"},
+		{"rb", true, "ronnabyte"},
+		{"qb", true, "quettabyte"},
+
+		// Valid short binary units
+		{"kib", true, "kibibyte"},
+		{"mib", true, "mebibyte"},
+		{"gib", true, "gibibyte"},
+		{"tib", true, "tebibyte"},
+		{"pib", true, "pebibyte"},
+		{"eib", true, "exbibyte"},
+		{"zib", true, "zebibyte"},
+		{"yib", true, "yobibyte"},
+		{"rib", true, "ronnibyte"},
+		{"qib", true, "quettibyte"},
+
+		// Valid long decimal names
+		{"byte", true, "byte (long)"},
+		{"bytes", true, "bytes (long)"},
+		{"kilobyte", true, "kilobyte (long)"},
+		{"kilobytes", true, "kilobytes (long)"},
+		{"megabyte", true, "megabyte (long)"},
+		{"megabytes", true, "megabytes (long)"},
+		{"gigabyte", true, "gigabyte (long)"},
+		{"gigabytes", true, "gigabytes (long)"},
+		{"terabyte", true, "terabyte (long)"},
+		{"terabytes", true, "terabytes (long)"},
+		{"petabyte", true, "petabyte (long)"},
+		{"petabytes", true, "petabytes (long)"},
+		{"exabyte", true, "exabyte (long)"},
+		{"exabytes", true, "exabytes (long)"},
+		{"zettabyte", true, "zettabyte (long)"},
+		{"zettabytes", true, "zettabytes (long)"},
+		{"yottabyte", true, "yottabyte (long)"},
+		{"yottabytes", true, "yottabytes (long)"},
+		{"ronnabyte", true, "ronnabyte (long)"},
+		{"ronnabytes", true, "ronnabytes (long)"},
+		{"quettabyte", true, "quettabyte (long)"},
+		{"quettabytes", true, "quettabytes (long)"},
+
+		// Valid long binary names
+		{"kibibyte", true, "kibibyte (long)"},
+		{"kibibytes", true, "kibibytes (long)"},
+		{"mebibyte", true, "mebibyte (long)"},
+		{"mebibytes", true, "mebibytes (long)"},
+		{"gibibyte", true, "gibibyte (long)"},
+		{"gibibytes", true, "gibibytes (long)"},
+		{"tebibyte", true, "tebibyte (long)"},
+		{"tebibytes", true, "tebibytes (long)"},
+		{"pebibyte", true, "pebibyte (long)"},
+		{"pebibytes", true, "pebibytes (long)"},
+		{"exbibyte", true, "exbibyte (long)"},
+		{"exbibytes", true, "exbibytes (long)"},
+		{"zebibyte", true, "zebibyte (long)"},
+		{"zebibytes", true, "zebibytes (long)"},
+		{"yobibyte", true, "yobibyte (long)"},
+		{"yobibytes", true, "yobibytes (long)"},
+		{"ronnibyte", true, "ronnibyte (long)"},
+		{"ronnibytes", true, "ronnibytes (long)"},
+		{"quettibyte", true, "quettibyte (long)"},
+		{"quettibytes", true, "quettibytes (long)"},
+
+		// Case insensitivity
+		{"KB", true, "uppercase"},
+		{"Kb", true, "mixed case"},
+		{"KiB", true, "mixed case binary"},
+		{"MEGABYTE", true, "uppercase long"},
+		{"GigaByte", true, "mixed case long"},
+
+		// Whitespace handling
+		{" kb", true, "leading space"},
+		{"kb ", true, "trailing space"},
+		{"  kb  ", true, "both spaces"},
+		{"\tkb", true, "tab"},
+		{"\tKiB\t", true, "tab and mixed case"},
+
+		// Invalid units
+		{"x", false, "invalid single character"},
+		{"xb", false, "invalid unit"},
+		{"kilobit", false, "kilobit (not supported)"},
+		{"megabit", false, "megabit (not supported)"},
+		{"k", false, "k without b"},
+		{"ki", false, "ki without b"},
+		{"", false, "empty string"},
+		{"   ", false, "only spaces"},
+		{"123", false, "just number"},
+		{"kb2", false, "unit with number"},
+		{"gigabytee", false, "typo"},
+		{"kilobytes2", false, "long name with number"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsValidUnit(tt.unit)
+			if result != tt.expected {
+				t.Errorf("IsValidUnit(%q) = %v, expected %v", tt.unit, result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestParseBasicUnits tests parsing of basic byte units
 func TestParseBasicUnits(t *testing.T) {
 	tests := []struct {
