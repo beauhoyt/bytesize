@@ -8,7 +8,6 @@ import (
 	"math"
 	"math/big"
 	"slices"
-	"strconv"
 	"strings"
 	"unicode"
 )
@@ -162,16 +161,6 @@ func Parse(s string) (Bytes, error) {
 		}
 	}
 
-	// Parse the numeric part
-	num, err := strconv.ParseFloat(string(numRunes), 64)
-	if err != nil {
-		return Bytes{}, fmt.Errorf("invalid number: %s", string(numRunes))
-	}
-
-	if num < 0 {
-		return Bytes{}, fmt.Errorf("negative value: %s", string(numRunes))
-	}
-
 	// Determine the unit multiplier
 	var multiplier Bytes
 
@@ -273,32 +262,57 @@ func Parse(s string) (Bytes, error) {
 		return Bytes{}, fmt.Errorf("unknown unit: %s", string(unitRunes))
 	}
 
-	// Convert the number to uint64 to multiply
-	uint64Num := uint64(num)
-	floatPart := num - float64(uint64Num)
-
-	// If there's a fractional part, we need to handle it carefully
-	result, err := Uint128(multiplier).Mul64Error(uint64Num)
-	if err != nil {
-		return Bytes{}, fmt.Errorf("Uint128 multiplying error: %w", err)
+	// Parse the numeric part using big.Rat for arbitrary precision
+	numStr := string(numRunes)
+	if numStr == "" {
+		return Bytes{}, fmt.Errorf("invalid number: empty numeric part")
 	}
 
-	if floatPart > 0 {
-		// Handle fractional part by multiplying the multiplier
-		if multiplier.Hi == 0 {
-			fracBytes := Uint128{uint64(floatPart * float64(multiplier.Lo)), 0}
-			result = result.Add(fracBytes)
-		} else {
-			// For large multipliers, use float64 carefully
-			fracValue := floatPart * float64(multiplier.Lo)
-			if multiplier.Hi > 0 {
-				fracValue += floatPart * float64(multiplier.Hi) * math.Pow(2, 64)
-			}
-			fracBytes := Uint128{uint64(fracValue), 0}
-			result = result.Add(fracBytes)
-		}
+	numRat := new(big.Rat)
+	_, ok := numRat.SetString(numStr)
+	if !ok {
+		return Bytes{}, fmt.Errorf("invalid number: %s", numStr)
 	}
 
+	// Check for negative values
+	if numRat.Sign() < 0 {
+		return Bytes{}, fmt.Errorf("negative value: %s", numStr)
+	}
+
+	// Convert multiplier to big.Int
+	multiplierInt := big.NewInt(0).SetUint64(Uint128(multiplier).Lo)
+	if Uint128(multiplier).Hi > 0 {
+		// Reconstruct full 128-bit number: (Hi << 64) | Lo
+		multiplierInt.SetUint64(Uint128(multiplier).Hi)
+		multiplierInt.Lsh(multiplierInt, 64)
+		multiplierInt.Or(multiplierInt, big.NewInt(0).SetUint64(Uint128(multiplier).Lo))
+	}
+
+	// Multiply the number by the multiplier: result = numRat * multiplier
+	resultRat := new(big.Rat).Mul(numRat, new(big.Rat).SetInt(multiplierInt))
+
+	// Get the integer and fractional parts by dividing numerator by denominator
+	resultInt := new(big.Int).Div(resultRat.Num(), resultRat.Denom())
+
+	// Check if result overflows 128 bits
+	if resultInt.BitLen() > 128 {
+		return Bytes{}, fmt.Errorf("value overflows Uint128: result is %d bits", resultInt.BitLen())
+	}
+
+	if resultInt.Sign() < 0 {
+		return Bytes{}, fmt.Errorf("fatal: negative result from positive inputs")
+	}
+
+	// Convert big.Int to Uint128 (Lo and Hi)
+	// Extract Lo (lower 64 bits)
+	loInt := new(big.Int).And(resultInt, big.NewInt(-1).SetUint64(^uint64(0)))
+	lo := loInt.Uint64()
+
+	// Extract Hi (upper 64 bits)
+	hiInt := new(big.Int).Rsh(resultInt, 64)
+	hi := hiInt.Uint64()
+
+	result := Uint128{lo, hi}
 	return Bytes(result), nil
 }
 

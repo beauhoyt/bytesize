@@ -514,9 +514,16 @@ func TestParseBoundaryValues(t *testing.T) {
 		{
 			input: "18446744073709551615 B",
 			checkFn: func(result Bytes) bool {
-				return result.Lo == 18446744073709551615 && result.Hi == 0
+				return result.Lo == 18_446_744_073_709_551_615 && result.Hi == 0
 			},
 			name: "MaxUint64 bytes",
+		},
+		{
+			input: "18446744073709551616 B",
+			checkFn: func(result Bytes) bool {
+				return result.Lo == 0 && result.Hi == 1
+			},
+			name: "MaxUint64 plus 1 bytes",
 		},
 		{
 			input: "0.00001 KB",
