@@ -535,7 +535,7 @@ func TestParseBoundaryValues(t *testing.T) {
 				t.Fatalf("Parse(%q) error = %v, want nil", tt.input, err)
 			}
 			if !tt.checkFn(result) {
-				t.Errorf("Parse(%q) = %v, validation failed: %s", tt.input, result, tt.name)
+				t.Errorf("Parse(%q) = %#v, validation failed: %s", tt.input, result, tt.name)
 			}
 		})
 	}
