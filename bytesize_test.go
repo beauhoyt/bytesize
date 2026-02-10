@@ -2,6 +2,7 @@ package bytesize
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -469,7 +470,6 @@ func TestParseErrors(t *testing.T) {
 		{"\n", "empty string"},
 
 		// Invalid formats
-		{"abc", "invalid number"},
 		{"MB", "invalid number"},
 		{"1.2.3 KB", "multiple decimal points"},
 		{" . MB", "invalid number"},
@@ -480,6 +480,7 @@ func TestParseErrors(t *testing.T) {
 		{"-0.1 GB", "negative value"},
 
 		// Unknown units
+		{"abc", "unknown unit"},
 		{"10 XB", "unknown unit"},
 		{"5 unknown", "unknown unit"},
 		{"100 zz", "unknown unit"},
@@ -492,6 +493,9 @@ func TestParseErrors(t *testing.T) {
 			result, err := Parse(tt.input)
 			if err == nil {
 				t.Fatalf("Parse(%q) should have errored, got {%d, %d}", tt.input, result.Lo, result.Hi)
+			}
+			if !strings.Contains(err.Error(), tt.expectedErr) {
+				t.Errorf("Parse(%q) error = %v, expected to contain %q", tt.input, err, tt.expectedErr)
 			}
 		})
 	}
@@ -703,6 +707,112 @@ func BenchmarkParseParallel(b *testing.B) {
 			Parse("256 MB")
 		}
 	})
+}
+
+func TestSet(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected Bytes
+	}{
+		{"1 B", B},
+		{"1 KB", KB},
+		{"1 MB", MB},
+		{"1 GB", GB},
+		{"1 TB", TB},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			var b Bytes
+			err := b.Set(tt.input)
+			if err != nil {
+				t.Fatalf("Set(%q) error = %v, want nil", tt.input, err)
+			}
+			if b != tt.expected {
+				t.Errorf("Set(%q) = {%d, %d}, want {%d, %d}",
+					tt.input, b.Lo, b.Hi, tt.expected.Lo, tt.expected.Hi)
+			}
+		})
+	}
+}
+
+func TestSetErrors(t *testing.T) {
+	tests := []struct {
+		input       string
+		expectedErr string
+	}{
+		{"", "empty string"},
+		{" ", "empty string"},
+		{"invalid", "unknown unit"},
+		{"-1 B", "negative value"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("input=%q", tt.input), func(t *testing.T) {
+			var b Bytes
+			err := b.Set(tt.input)
+			if err == nil {
+				t.Fatalf("Set(%q) should have errored, got {%d, %d}", tt.input, b.Lo, b.Hi)
+			}
+			if !strings.Contains(err.Error(), tt.expectedErr) {
+				t.Errorf("Set(%q) error = %v, expected to contain %q", tt.input, err, tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestGet(t *testing.T) {
+	tt := []struct {
+		input    Bytes
+		expected Bytes
+	}{
+		{B, B},
+		{KB, KB},
+		{MB, MB},
+		{GB, GB},
+	}
+
+	for _, tc := range tt {
+		t.Run(fmt.Sprintf("input=%#v", tc.input), func(t *testing.T) {
+			result := tc.input.Get().(Bytes)
+			if result != tc.expected {
+				t.Errorf("Get() = {%d, %d}, want {%d, %d}",
+					result.Lo, result.Hi, tc.expected.Lo, tc.expected.Hi)
+			}
+		})
+	}
+}
+
+func TestType(t *testing.T) {
+	var b Bytes
+	if b.Type() != "bytesize.Bytes" {
+		t.Errorf("Type() = %q, want %q", b.Type(), "bytesize.Bytes")
+	}
+}
+
+func TestUnmarshalText(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected Bytes
+	}{
+		{"1 B", B},
+		{"1 KB", KB},
+		{"1 MB", MB},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			var b Bytes
+			err := b.UnmarshalText([]byte(tt.input))
+			if err != nil {
+				t.Fatalf("UnmarshalText(%q) error = %v, want nil", tt.input, err)
+			}
+			if b != tt.expected {
+				t.Errorf("UnmarshalText(%q) = {%d, %d}, want {%d, %d}",
+					tt.input, b.Lo, b.Hi, tt.expected.Lo, tt.expected.Hi)
+			}
+		})
+	}
 }
 
 // ============ Format Function Tests ============

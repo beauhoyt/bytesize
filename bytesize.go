@@ -139,127 +139,14 @@ func Parse(s string) (Bytes, error) {
 		return Bytes{}, fmt.Errorf("empty string")
 	}
 
-	foundDecimalPoint := false
-	var numRunes, unitRunes []rune
-	for _, r := range s {
-		// 1. Skip spaces between number and unit
-		if unicode.IsSpace(r) {
-			continue
-		}
-		// 2. If we hit a number or decimal point, it's part of the number
-		if (r >= '0' && r <= '9') || r == '.' {
-			if r == '.' {
-				if foundDecimalPoint {
-					return Bytes{}, fmt.Errorf("invalid number: multiple decimal points in %s", s)
-				}
-				foundDecimalPoint = true
-			}
-			numRunes = append(numRunes, r)
-		} else {
-			// 3. The rest is the unit
-			unitRunes = append(unitRunes, r)
-		}
+	numRunes, unitRunes, err := getNumAndUnitRunes(s)
+	if err != nil {
+		return Bytes{}, fmt.Errorf("error parsing number and unit: %v", err)
 	}
 
-	// Determine the unit multiplier
-	var multiplier Bytes
-
-	// Check decimal units (short names first, then long names)
-	switch strings.ToLower(string(unitRunes)) {
-	// Short unit names
-	// Decimal units
-	case "b":
-		multiplier = B
-	case "kb":
-		multiplier = KB
-	case "mb":
-		multiplier = MB
-	case "gb":
-		multiplier = GB
-	case "tb":
-		multiplier = TB
-	case "pb":
-		multiplier = PB
-	case "eb":
-		multiplier = EB
-	case "zb":
-		multiplier = ZB
-	case "yb":
-		multiplier = YB
-	case "rb":
-		multiplier = RB
-	case "qb":
-		multiplier = QB
-
-	// Binary units
-	case "kib":
-		multiplier = KiB
-	case "mib":
-		multiplier = MiB
-	case "gib":
-		multiplier = GiB
-	case "tib":
-		multiplier = TiB
-	case "pib":
-		multiplier = PiB
-	case "eib":
-		multiplier = EiB
-	case "zib":
-		multiplier = ZiB
-	case "yib":
-		multiplier = YiB
-	case "rib":
-		multiplier = RiB
-	case "qib":
-		multiplier = QiB
-
-	// Long decimal names
-	case "byte", "bytes":
-		multiplier = B
-	case "kilobyte", "kilobytes":
-		multiplier = KB
-	case "megabyte", "megabytes":
-		multiplier = MB
-	case "gigabyte", "gigabytes":
-		multiplier = GB
-	case "terabyte", "terabytes":
-		multiplier = TB
-	case "petabyte", "petabytes":
-		multiplier = PB
-	case "exabyte", "exabytes":
-		multiplier = EB
-	case "zettabyte", "zettabytes":
-		multiplier = ZB
-	case "yottabyte", "yottabytes":
-		multiplier = YB
-	case "ronnabyte", "ronnabytes":
-		multiplier = RB
-	case "quettabyte", "quettabytes":
-		multiplier = QB
-
-	// Long binary names
-	case "kibibyte", "kibibytes":
-		multiplier = KiB
-	case "mebibyte", "mebibytes":
-		multiplier = MiB
-	case "gibibyte", "gibibytes":
-		multiplier = GiB
-	case "tebibyte", "tebibytes":
-		multiplier = TiB
-	case "pebibyte", "pebibytes":
-		multiplier = PiB
-	case "exbibyte", "exbibytes":
-		multiplier = EiB
-	case "zebibyte", "zebibytes":
-		multiplier = ZiB
-	case "yobibyte", "yobibytes":
-		multiplier = YiB
-	case "ronnibyte", "ronnibytes":
-		multiplier = RiB
-	case "quettibyte", "quettibytes":
-		multiplier = QiB
-	default:
-		return Bytes{}, fmt.Errorf("unknown unit: %s", string(unitRunes))
+	multiplier, err := getMultiplierForUnitString(string(unitRunes))
+	if err != nil {
+		return Bytes{}, err
 	}
 
 	// Parse the numeric part using big.Rat for arbitrary precision
@@ -274,7 +161,6 @@ func Parse(s string) (Bytes, error) {
 		return Bytes{}, fmt.Errorf("invalid number: %s", numStr)
 	}
 
-	// Check for negative values
 	if numRat.Sign() < 0 {
 		return Bytes{}, fmt.Errorf("negative value: %s", numStr)
 	}
@@ -300,6 +186,8 @@ func Parse(s string) (Bytes, error) {
 	}
 
 	if resultInt.Sign() < 0 {
+		// This should never happen since we check for negative input, but
+		// just in case, handle it gracefully
 		return Bytes{}, fmt.Errorf("fatal: negative result from positive inputs")
 	}
 
@@ -314,6 +202,138 @@ func Parse(s string) (Bytes, error) {
 
 	result := Uint128{lo, hi}
 	return Bytes(result), nil
+}
+
+// getNumAndUnitRunes separates the numeric part and the unit part of the
+// input string.
+func getNumAndUnitRunes(s string) ([]rune, []rune, error) {
+	foundDecimalPoint := false
+	var numRunes, unitRunes []rune
+
+	for _, r := range s {
+		// 1. Skip spaces between number and unit
+		if unicode.IsSpace(r) {
+			continue
+		}
+		// 2. If we hit a number or decimal point, it's part of the number
+		if r == '-' || (r >= '0' && r <= '9') || r == '.' {
+			if r == '.' {
+				if foundDecimalPoint {
+					return nil, nil, fmt.Errorf("invalid number: multiple decimal points in %s", s)
+				}
+				foundDecimalPoint = true
+			}
+			numRunes = append(numRunes, r)
+		} else {
+			// 3. The rest is the unit
+			unitRunes = append(unitRunes, r)
+		}
+	}
+
+	return numRunes, unitRunes, nil
+}
+
+// getMultiplierForUnitString returns the multiplier Bytes value corresponding
+// to the given unit string.
+func getMultiplierForUnitString(unitStr string) (Bytes, error) {
+	unitStr = strings.ToLower(strings.TrimSpace(unitStr))
+	// Check decimal units (short names first, then long names)
+	switch unitStr {
+	// Short unit names
+	// Decimal units
+	case "b":
+		return B, nil
+	case "kb":
+		return KB, nil
+	case "mb":
+		return MB, nil
+	case "gb":
+		return GB, nil
+	case "tb":
+		return TB, nil
+	case "pb":
+		return PB, nil
+	case "eb":
+		return EB, nil
+	case "zb":
+		return ZB, nil
+	case "yb":
+		return YB, nil
+	case "rb":
+		return RB, nil
+	case "qb":
+		return QB, nil
+
+	// Binary units
+	case "kib":
+		return KiB, nil
+	case "mib":
+		return MiB, nil
+	case "gib":
+		return GiB, nil
+	case "tib":
+		return TiB, nil
+	case "pib":
+		return PiB, nil
+	case "eib":
+		return EiB, nil
+	case "zib":
+		return ZiB, nil
+	case "yib":
+		return YiB, nil
+	case "rib":
+		return RiB, nil
+	case "qib":
+		return QiB, nil
+
+	// Long decimal names
+	case "byte", "bytes":
+		return B, nil
+	case "kilobyte", "kilobytes":
+		return KB, nil
+	case "megabyte", "megabytes":
+		return MB, nil
+	case "gigabyte", "gigabytes":
+		return GB, nil
+	case "terabyte", "terabytes":
+		return TB, nil
+	case "petabyte", "petabytes":
+		return PB, nil
+	case "exabyte", "exabytes":
+		return EB, nil
+	case "zettabyte", "zettabytes":
+		return ZB, nil
+	case "yottabyte", "yottabytes":
+		return YB, nil
+	case "ronnabyte", "ronnabytes":
+		return RB, nil
+	case "quettabyte", "quettabytes":
+		return QB, nil
+
+	// Long binary names
+	case "kibibyte", "kibibytes":
+		return KiB, nil
+	case "mebibyte", "mebibytes":
+		return MiB, nil
+	case "gibibyte", "gibibytes":
+		return GiB, nil
+	case "tebibyte", "tebibytes":
+		return TiB, nil
+	case "pebibyte", "pebibytes":
+		return PiB, nil
+	case "exbibyte", "exbibytes":
+		return EiB, nil
+	case "zebibyte", "zebibytes":
+		return ZiB, nil
+	case "yobibyte", "yobibytes":
+		return YiB, nil
+	case "ronnibyte", "ronnibytes":
+		return RiB, nil
+	case "quettibyte", "quettibytes":
+		return QiB, nil
+	default:
+		return Bytes{}, fmt.Errorf("unknown unit: %s", unitStr)
+	}
 }
 
 // Set implements the flag.Value interface for Bytes.
@@ -333,7 +353,7 @@ func (b *Bytes) Get() any {
 
 // Type implements the flag.Value interface for Bytes.
 func (b *Bytes) Type() string {
-	return "bytes"
+	return "bytesize.Bytes"
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface for Bytes.
@@ -360,7 +380,8 @@ const (
 	// sizes, which includes two decimal places and the unit.
 	DefaultFormatStr = "%.2f %s"
 	// DefaultLongUnits indicates whether to use long unit names, such
-	// as "Megabyte" instead of "MB", though the default is to use short unit names.
+	// as "Megabyte" instead of "MB", though the default is to use short unit
+	// names.
 	DefaultLongUnits = false
 	// DefaultDecimalUnits indicates whether to use decimal (SI) units by default
 	DefaultDecimalUnits = true
@@ -436,7 +457,7 @@ func (b Bytes) String() string {
 	if err != nil {
 		// This should never happen since we're using default options,
 		// but just in case, return a fallback string
-		return fmt.Sprintf("%d Bytes", Uint128(b).Lo)
+		return fmt.Sprintf("%d B", Uint128(b).Lo)
 	}
 	return str
 }

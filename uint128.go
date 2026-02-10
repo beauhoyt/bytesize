@@ -108,6 +108,16 @@ func (u Uint128) Add(v Uint128) Uint128 {
 	return Uint128{lo, hi}
 }
 
+// AddErr returns u+v, returning an error on overflow.
+func (u Uint128) AddErr(v Uint128) (Uint128, error) {
+	lo, carry := bits.Add64(u.Lo, v.Lo, 0)
+	hi, carry := bits.Add64(u.Hi, v.Hi, carry)
+	if carry != 0 {
+		return Uint128{}, fmt.Errorf("add: overflow: u=%s, v=%s", u.String(), v.String())
+	}
+	return Uint128{lo, hi}, nil
+}
+
 // AddWrap returns u+v with wraparound semantics; for example,
 // Max.AddWrap(From64(1)) == Zero.
 func (u Uint128) AddWrap(v Uint128) Uint128 {
@@ -124,6 +134,16 @@ func (u Uint128) Add64(v uint64) Uint128 {
 		panic("add64: overflow: u=" + u.String() + ", v=" + fmt.Sprint(v))
 	}
 	return Uint128{lo, hi}
+}
+
+// Add64Err returns u+v, returning an error on overflow.
+func (u Uint128) Add64Err(v uint64) (Uint128, error) {
+	lo, carry := bits.Add64(u.Lo, v, 0)
+	hi, carry := bits.Add64(u.Hi, 0, carry)
+	if carry != 0 {
+		return Uint128{}, fmt.Errorf("add64: overflow: u=%s, v=%d", u.String(), v)
+	}
+	return Uint128{lo, hi}, nil
 }
 
 // AddWrap64 returns u+v with wraparound semantics; for example,
@@ -144,6 +164,16 @@ func (u Uint128) Sub(v Uint128) Uint128 {
 	return Uint128{lo, hi}
 }
 
+// SubErr returns u-v, returning an error on underflow.
+func (u Uint128) SubErr(v Uint128) (Uint128, error) {
+	lo, borrow := bits.Sub64(u.Lo, v.Lo, 0)
+	hi, borrow := bits.Sub64(u.Hi, v.Hi, borrow)
+	if borrow != 0 {
+		return Uint128{}, fmt.Errorf("sub: underflow: u=%s, v=%s", u.String(), v.String())
+	}
+	return Uint128{lo, hi}, nil
+}
+
 // SubWrap returns u-v with wraparound semantics; for example,
 // Zero.SubWrap(From64(1)) == Max.
 func (u Uint128) SubWrap(v Uint128) Uint128 {
@@ -160,6 +190,16 @@ func (u Uint128) Sub64(v uint64) Uint128 {
 		panic("sub64: underflow: u=" + u.String() + ", v=" + fmt.Sprint(v))
 	}
 	return Uint128{lo, hi}
+}
+
+// Sub64Err returns u-v, returning an error on underflow.
+func (u Uint128) Sub64Err(v uint64) (Uint128, error) {
+	lo, borrow := bits.Sub64(u.Lo, v, 0)
+	hi, borrow := bits.Sub64(u.Hi, 0, borrow)
+	if borrow != 0 {
+		return Uint128{}, fmt.Errorf("sub64: underflow: u=%s, v=%d", u.String(), v)
+	}
+	return Uint128{lo, hi}, nil
 }
 
 // SubWrap64 returns u-v with wraparound semantics; for example,
@@ -183,6 +223,19 @@ func (u Uint128) Mul(v Uint128) Uint128 {
 	return Uint128{lo, hi}
 }
 
+// MulErr returns u*v, returning an error on overflow.
+func (u Uint128) MulErr(v Uint128) (Uint128, error) {
+	hi, lo := bits.Mul64(u.Lo, v.Lo)
+	p0, p1 := bits.Mul64(u.Hi, v.Lo)
+	p2, p3 := bits.Mul64(u.Lo, v.Hi)
+	hi, c0 := bits.Add64(hi, p1, 0)
+	hi, c1 := bits.Add64(hi, p3, c0)
+	if (u.Hi != 0 && v.Hi != 0) || p0 != 0 || p2 != 0 || c1 != 0 {
+		return Uint128{}, fmt.Errorf("mul: overflow: u=%s, v=%s", u.String(), v.String())
+	}
+	return Uint128{lo, hi}, nil
+}
+
 // MulWrap returns u*v with wraparound semantics; for example,
 // Max.MulWrap(Max) == 1.
 func (u Uint128) MulWrap(v Uint128) Uint128 {
@@ -202,16 +255,14 @@ func (u Uint128) Mul64(v uint64) Uint128 {
 	return Uint128{lo, hi}
 }
 
-// Mul64Error returns u*v, returning an error on overflow.
-func (u Uint128) Mul64Error(v uint64) (Uint128, error) {
+// Mul64Err returns u*v, returning an error on overflow.
+func (u Uint128) Mul64Err(v uint64) (Uint128, error) {
 	// 1. Multiply the low part of u by v
 	// hi1 is the carry that MUST go into our final Hi
 	hi1, lo := bits.Mul64(u.Lo, v)
-
 	// 2. Multiply the high part of u by v
 	// hi2 is the carry that would require 192 bits (Overflow!)
 	hi2, hiPart := bits.Mul64(u.Hi, v)
-
 	// 3. Check for Overflow
 	// If hi2 > 0, we exceeded 128 bits
 	// If adding hi1 to hiPart causes a carry, we also exceeded 128 bits
@@ -219,7 +270,6 @@ func (u Uint128) Mul64Error(v uint64) (Uint128, error) {
 	if hi2 > 0 || carry > 0 {
 		return Uint128{}, fmt.Errorf("mul64: overflow: u=%s, v=%d", u.String(), v)
 	}
-
 	return Uint128{lo, finalHi}, nil
 }
 
@@ -476,6 +526,19 @@ func FromBig(i *big.Int) (u Uint128) {
 	u.Lo = i.Uint64()
 	u.Hi = i.Rsh(i, 64).Uint64()
 	return u
+}
+
+// FromBigErr converts i to a Uint128 value, returning an error if i is
+// negative or overflows 128 bits.
+func FromBigErr(i *big.Int) (u Uint128, err error) {
+	if i.Sign() < 0 {
+		return Uint128{}, fmt.Errorf("FromBigErr: value cannot be negative: %s", i.String())
+	} else if i.BitLen() > 128 {
+		return Uint128{}, fmt.Errorf("FromBigErr: value overflows Uint128: %s", i.String())
+	}
+	u.Lo = i.Uint64()
+	u.Hi = i.Rsh(i, 64).Uint64()
+	return u, nil
 }
 
 // FromString parses s as a Uint128 value.
