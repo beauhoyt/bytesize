@@ -6,10 +6,10 @@ GO_TOOL_COVER = $(GO_TOOL) cover
 .PHONY: test
 test:
 	$(GO_TEST) -v -coverprofile=c.out ./...
+	$(GO_TOOL_COVER) -func=c.out
 
 .PHONY: cover
 cover: test
-	$(GO_TOOL_COVER) -func=c.out
 	$(GO_TOOL_COVER) -html=c.out
 
 .PHONY: fuzz

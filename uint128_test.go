@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"math"
 	"math/big"
+	"math/bits"
 	"net"
 	"testing"
 )
@@ -29,6 +30,9 @@ func TestUint128(t *testing.T) {
 
 		if FromBig(x.Big()) != x {
 			t.Fatal("FromBig is not the inverse of Big for", x)
+		}
+		if v, err := FromBigErr(x.Big()); err != nil || v != x {
+			t.Fatal("FromBigErr is not the inverse of Big for", x)
 		}
 
 		b := make([]byte, 16)
@@ -67,8 +71,19 @@ func TestUint128(t *testing.T) {
 		}()
 		fn()
 	}
+	checkError := func(fn func() error, msg string) {
+		err := fn()
+		if err == nil {
+			t.Fatalf("expected error %q, got nil", msg)
+		}
+		if err.Error() != msg {
+			t.Fatalf("expected error %q, got %q", msg, err.Error())
+		}
+	}
 	checkPanic(func() { _ = FromBig(big.NewInt(-1)) }, "FromBig: value cannot be negative: -1")
 	checkPanic(func() { _ = FromBig(new(big.Int).Lsh(big.NewInt(1), 129)) }, "FromBig: value overflows Uint128: 680564733841876926926749214863536422912")
+	checkError(func() error { _, err := FromBigErr(big.NewInt(-1)); return err }, "FromBigErr: value cannot be negative: -1")
+	checkError(func() error { _, err := FromBigErr(new(big.Int).Lsh(big.NewInt(1), 129)); return err }, "FromBigErr: value overflows Uint128: 680564733841876926926749214863536422912")
 }
 
 func TestArithmetic(t *testing.T) {
@@ -193,6 +208,77 @@ func TestArithmetic(t *testing.T) {
 	}
 }
 
+func TestArithmeticErrors(t *testing.T) {
+	// compare Uint128 arithmetic methods to their math/big equivalents, using
+	// random values
+	randBuf := make([]byte, 17)
+	randUint128 := func() Uint128 {
+		rand.Read(randBuf)
+		var Lo, Hi uint64
+		if randBuf[16]&1 != 0 {
+			Lo = binary.LittleEndian.Uint64(randBuf[:8])
+		}
+		if randBuf[16]&2 != 0 {
+			Hi = binary.LittleEndian.Uint64(randBuf[8:])
+		}
+		return NewUint128(Lo, Hi)
+	}
+	checkBinOpXErr := func(x Uint128, op string, y Uint128, fn func(x, y Uint128) (Uint128, error), fnb func(z, x, y *big.Int) *big.Int) {
+		t.Helper()
+		rb := fnb(new(big.Int), x.Big(), y.Big())
+		shouldError := false
+		if rb.BitLen() > 128 || rb.Sign() < 0 {
+			shouldError = true
+		}
+		r, err := fn(x, y)
+		if shouldError {
+			if err == nil {
+				t.Fatalf("mismatch: %v %v %v should error, got %v", x, op, y, r)
+			}
+			return
+		}
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if r.Big().Cmp(rb) != 0 {
+			t.Fatalf("mismatch: %v %v %v should equal %v, got %v", x, op, y, rb, r)
+		}
+	}
+	checkBinOp64XErr := func(x Uint128, op string, y uint64, fn func(x Uint128, y uint64) (Uint128, error), fnb func(z, x, y *big.Int) *big.Int) {
+		t.Helper()
+		xb, yb := x.Big(), From64(y).Big()
+		rb := fnb(new(big.Int), xb, yb)
+		shouldError := false
+		if rb.BitLen() > 128 || rb.Sign() < 0 {
+			shouldError = true
+		}
+		r, err := fn(x, y)
+		if shouldError {
+			if err == nil {
+				t.Fatalf("mismatch: %v %v %v should error, got %v", x, op, y, r)
+			}
+			return
+		}
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if r.Big().Cmp(rb) != 0 {
+			t.Fatalf("mismatch: %v %v %v should equal %v, got %v", x, op, y, rb, r)
+		}
+	}
+	for range 1000 {
+		x, y := randUint128(), randUint128()
+		checkBinOpXErr(x, "[+]", y, Uint128.AddErr, (*big.Int).Add)
+		checkBinOpXErr(x, "[-]", y, Uint128.SubErr, (*big.Int).Sub)
+		checkBinOpXErr(x, "[*]", y, Uint128.MulErr, (*big.Int).Mul)
+		// check 64-bit variants
+		y64 := y.Lo
+		checkBinOp64XErr(x, "[+]", y64, Uint128.Add64Err, (*big.Int).Add)
+		checkBinOp64XErr(x, "[-]", y64, Uint128.Sub64Err, (*big.Int).Sub)
+		checkBinOp64XErr(x, "[*]", y64, Uint128.Mul64Err, (*big.Int).Mul)
+	}
+}
+
 func TestOverflowAndUnderflow(t *testing.T) {
 	x := Max
 	y := NewUint128(10, 10)
@@ -216,6 +302,34 @@ func TestOverflowAndUnderflow(t *testing.T) {
 	checkPanic(func() { _ = NewUint128(0, 10).Mul(NewUint128(0, 10)) }, "mul: overflow: u=184467440737095516160, v=184467440737095516160")
 	checkPanic(func() { _ = NewUint128(0, 1).Mul(NewUint128(0, 1)) }, "mul: overflow: u=18446744073709551616, v=18446744073709551616")
 	checkPanic(func() { _ = x.Mul64(math.MaxInt64) }, "mul64: overflow: u=340282366920938463463374607431768211455, v=9223372036854775807")
+}
+
+func TestOverflowAndUnderflowErrors(t *testing.T) {
+	x := Max
+	y := NewUint128(10, 10)
+	z := From64(10)
+
+	checkErr := func(fn func() (Uint128, error), msg string) {
+		r, err := fn()
+		if err == nil {
+			t.Fatalf("expected error %q, got nil", msg)
+		}
+		if err.Error() != msg {
+			t.Fatalf("expected error %q, got %q", msg, err.Error())
+		}
+		if r != (Uint128{}) {
+			t.Fatalf("expected zero value on error, got %v", r)
+		}
+	}
+
+	checkErr(func() (Uint128, error) { return x.AddErr(y) }, "add: overflow: u=340282366920938463463374607431768211455, v=184467440737095516170")
+	checkErr(func() (Uint128, error) { return x.Add64Err(10) }, "add64: overflow: u=340282366920938463463374607431768211455, v=10")
+	checkErr(func() (Uint128, error) { return y.SubErr(x) }, "sub: underflow: u=184467440737095516170, v=340282366920938463463374607431768211455")
+	checkErr(func() (Uint128, error) { return z.Sub64Err(math.MaxInt64) }, "sub64: underflow: u=10, v=9223372036854775807")
+	checkErr(func() (Uint128, error) { return x.MulErr(y) }, "mul: overflow: u=340282366920938463463374607431768211455, v=184467440737095516170")
+	checkErr(func() (Uint128, error) { return NewUint128(0, 10).MulErr(NewUint128(0, 10)) }, "mul: overflow: u=184467440737095516160, v=184467440737095516160")
+	checkErr(func() (Uint128, error) { return NewUint128(0, 1).MulErr(NewUint128(0, 1)) }, "mul: overflow: u=18446744073709551616, v=18446744073709551616")
+	checkErr(func() (Uint128, error) { return x.Mul64Err(math.MaxInt64) }, "mul64: overflow: u=340282366920938463463374607431768211455, v=9223372036854775807")
 }
 
 func TestLeadingZeros(t *testing.T) {
@@ -280,6 +394,291 @@ func TestLeadingZeros(t *testing.T) {
 		zeros := tc.l.Xor(tc.r).LeadingZeros()
 		if zeros != tc.zeros {
 			t.Errorf("mismatch (expected: %d, got: %d)", tc.zeros, zeros)
+		}
+	}
+}
+
+func TestTrailingZeros(t *testing.T) {
+	tcs := []struct {
+		l     Uint128
+		r     Uint128
+		zeros int
+	}{
+		{
+			l:     NewUint128(0x00, 0xf000000000000000),
+			r:     NewUint128(0x00, 0xe000000000000000),
+			zeros: 124,
+		},
+		{
+			l:     NewUint128(0x00, 0xf00000000000000),
+			r:     NewUint128(0x00, 0xc00000000000000),
+			zeros: 120,
+		},
+		{
+			l:     NewUint128(0x00, 0xf0000000000000),
+			r:     NewUint128(0x00, 0x80000000000000),
+			zeros: 116,
+		},
+		{
+			l:     NewUint128(0x00, 0xffff000000000000),
+			r:     NewUint128(0x00, 0xff00000000000000),
+			zeros: 112,
+		},
+		{
+			l:     NewUint128(0x00, 0x000000000000ffff),
+			r:     NewUint128(0x00, 0x000000000000ff00),
+			zeros: 64,
+		},
+		{
+			l:     NewUint128(0xf000000000000000, 0x01),
+			r:     NewUint128(0x4000000000000000, 0x00),
+			zeros: 60,
+		},
+		{
+			l:     NewUint128(0xf000000000000000, 0x00),
+			r:     NewUint128(0x4000000000000000, 0x00),
+			zeros: 60,
+		},
+		{
+			l:     NewUint128(0xf000000000000000, 0x00),
+			r:     NewUint128(0x8000000000000000, 0x00),
+			zeros: 60,
+		},
+		{
+			l:     NewUint128(0x00, 0x00),
+			r:     NewUint128(0x00, 0x00),
+			zeros: 128,
+		},
+		{
+			l:     NewUint128(0x01, 0x00),
+			r:     NewUint128(0x00, 0x00),
+			zeros: 0,
+		},
+	}
+
+	for _, tc := range tcs {
+		zeros := tc.l.Xor(tc.r).TrailingZeros()
+		if zeros != tc.zeros {
+			t.Errorf("mismatch (expected: %d, got: %d)", tc.zeros, zeros)
+		}
+	}
+}
+
+func TestOnesCount(t *testing.T) {
+	tcs := []struct {
+		x        Uint128
+		oneCount int
+	}{
+		{
+			x:        NewUint128(0x00, 0x00),
+			oneCount: 0,
+		},
+		{
+			x:        NewUint128(0x01, 0x00),
+			oneCount: 1,
+		},
+		{
+			x:        NewUint128(0x00, 0x01),
+			oneCount: 1,
+		},
+		{
+			x:        NewUint128(0x01, 0x01),
+			oneCount: 2,
+		},
+		{
+			x:        NewUint128(0x0F, 0xF0),
+			oneCount: 8,
+		},
+		{
+			x:        NewUint128(0xFF, 0xFF),
+			oneCount: 16,
+		},
+	}
+
+	for _, tc := range tcs {
+		if tc.x.OnesCount() != tc.oneCount {
+			t.Errorf("mismatch: expected %d, got %d", tc.oneCount, tc.x.OnesCount())
+		}
+	}
+}
+
+func TestRotateLeft(t *testing.T) {
+	tcs := []struct {
+		x Uint128
+		n int
+		r Uint128
+	}{
+		{
+			x: NewUint128(0x00, 0x01),
+			n: 1,
+			r: NewUint128(0x00, 0x02),
+		},
+		{
+			x: NewUint128(0x00, 0x01),
+			n: 64,
+			r: NewUint128(0x01, 0x00),
+		},
+		{
+			x: NewUint128(0x00, 0x01),
+			n: 65,
+			r: NewUint128(0x02, 0x00),
+		},
+		{
+			x: NewUint128(0x00, 0x01),
+			n: 128,
+			r: NewUint128(0x00, 0x01),
+		},
+		{
+			x: NewUint128(0x01, 0x00),
+			n: 1,
+			r: NewUint128(0x02, 0x00),
+		},
+		{
+			x: NewUint128(0x01, 0x00),
+			n: 64,
+			r: NewUint128(0x00, 0x01),
+		},
+		{
+			x: NewUint128(0x01, 0x00),
+			n: 65,
+			r: NewUint128(0x00, 0x02),
+		},
+		{
+			x: NewUint128(0x01, 0x00),
+			n: 128,
+			r: NewUint128(0x01, 0x00),
+		},
+	}
+
+	for _, tc := range tcs {
+		if tc.x.RotateLeft(tc.n) != tc.r {
+			t.Errorf("mismatch: expected %v, got %v", tc.r, tc.x.RotateLeft(tc.n))
+		}
+	}
+}
+
+func TestRotateRight(t *testing.T) {
+	tcs := []struct {
+		x Uint128
+		n int
+		r Uint128
+	}{
+		{
+			x: NewUint128(0x00, 0x01),
+			n: 1,
+			r: NewUint128(0x8000000000000000, 0x00),
+		},
+		{
+			x: NewUint128(0x00, 0x01),
+			n: 64,
+			r: NewUint128(0x01, 0x00),
+		},
+		{
+			x: NewUint128(0x00, 0x01),
+			n: 65,
+			r: NewUint128(0x00, 0x8000000000000000),
+		},
+		{
+			x: NewUint128(0x00, 0x01),
+			n: 128,
+			r: NewUint128(0x00, 0x01),
+		},
+		{
+			x: NewUint128(0x01, 0x00),
+			n: 1,
+			r: NewUint128(0x00, 0x8000000000000000),
+		},
+		{
+			x: NewUint128(0x01, 0x00),
+			n: 64,
+			r: NewUint128(0x00, 0x01),
+		},
+		{
+			x: NewUint128(0x01, 0x00),
+			n: 65,
+			r: NewUint128(0x8000000000000000, 0x00),
+		},
+		{
+			x: NewUint128(0x01, 0x00),
+			n: 128,
+			r: NewUint128(0x01, 0x00),
+		},
+	}
+
+	for _, tc := range tcs {
+		if tc.x.RotateRight(tc.n) != tc.r {
+			t.Errorf("mismatch: expected %v, got %v", tc.r, tc.x.RotateRight(tc.n))
+		}
+	}
+}
+
+func TestReverse(t *testing.T) {
+	tcs := []struct {
+		x Uint128
+		r Uint128
+	}{
+		{
+			x: NewUint128(0x0123456789abcdef, 0xfedcba9876543210),
+			r: NewUint128(bits.Reverse64(0xfedcba9876543210), bits.Reverse64(0x0123456789abcdef)),
+		},
+		{
+			x: NewUint128(0x0000000000000000, 0x0000000000000000),
+			r: NewUint128(0x0000000000000000, 0x0000000000000000),
+		},
+		{
+			x: NewUint128(0xffffffffffffffff, 0xffffffffffffffff),
+			r: NewUint128(0xffffffffffffffff, 0xffffffffffffffff),
+		},
+	}
+
+	for _, tc := range tcs {
+		if tc.x.Reverse() != tc.r {
+			t.Errorf("mismatch: expected %v, got %v", tc.r, tc.x.Reverse())
+		}
+	}
+}
+
+func TestReverseBytes(t *testing.T) {
+	tcs := []struct {
+		x Uint128
+		r Uint128
+	}{
+		{
+			x: NewUint128(0x0123456789abcdef, 0xfedcba9876543210),
+			r: NewUint128(bits.ReverseBytes64(0xfedcba9876543210), bits.ReverseBytes64(0x0123456789abcdef)),
+		},
+		{
+			x: NewUint128(0x0000000000000000, 0x0000000000000000),
+			r: NewUint128(0x0000000000000000, 0x0000000000000000),
+		},
+		{
+			x: NewUint128(0xffffffffffffffff, 0xffffffffffffffff),
+			r: NewUint128(0xffffffffffffffff, 0xffffffffffffffff),
+		},
+	}
+
+	for _, tc := range tcs {
+		if tc.x.ReverseBytes() != tc.r {
+			t.Errorf("mismatch: expected %v, got %v", tc.r, tc.x.ReverseBytes())
+		}
+	}
+}
+
+func TestLen(t *testing.T) {
+	tt := []struct {
+		x Uint128
+		l int
+	}{
+		{NewUint128(0, 0), 0},
+		{NewUint128(1, 0), 1},
+		{NewUint128(0, 1), 65},
+		{NewUint128(0xFFFFFFFFFFFFFFFF, 0), 64},
+		{NewUint128(0, 0xFFFFFFFFFFFFFFFF), 128},
+	}
+
+	for _, tc := range tt {
+		if tc.x.Len() != tc.l {
+			t.Errorf("mismatch: expected %d, got %d", tc.l, tc.x.Len())
 		}
 	}
 }
