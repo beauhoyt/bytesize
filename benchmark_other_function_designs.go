@@ -190,8 +190,6 @@ func getMultiplierByUnitStringNestedSwitchesVersion(unitStr string) (Bytes, erro
 			return RiB, nil
 		case 'o':
 			switch unitStr[2] {
-			case 'b':
-				return RiB, nil
 			case 'n':
 				switch unitStr[3] {
 				case 'n':
