@@ -709,6 +709,78 @@ func BenchmarkParseParallel(b *testing.B) {
 	})
 }
 
+func BenchmarkGetMultiplierByUnitString_LongDecimal(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitString("Quettabyte")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitString_LongBinary(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitString("Quettibyte")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitString_ShortDecimal(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitString("QB")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitString_ShortBinary(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitString("QiB")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_LongDecimal(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitStringNestedSwitchesVersion("Quettabyte")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_LongBinary(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitStringNestedSwitchesVersion("Quettibyte")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitStringNestedSwitchesVersion("QB")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortBinary(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitStringNestedSwitchesVersion("QiB")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitStringMapVersion_LongDecimal(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitStringMapVersion("Quettabyte")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitStringMapVersion_LongBinary(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitStringMapVersion("Quettibyte")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitStringMapVersion("QB")
+	}
+}
+
+func BenchmarkGetMultiplierByUnitStringMapVersion_ShortBinary(b *testing.B) {
+	for b.Loop() {
+		getMultiplierByUnitStringMapVersion("QiB")
+	}
+}
+
 func TestSet(t *testing.T) {
 	tests := []struct {
 		input    string

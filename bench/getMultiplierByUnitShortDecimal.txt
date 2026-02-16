@@ -1,0 +1,39 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/beauhoyt/bytesize
+cpu: Apple M1 Max
+BenchmarkGetMultiplierByUnitString_ShortDecimal
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	49883094	        23.90 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	52167484	        24.09 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	50744426	        23.92 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	52031673	        23.17 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	51343486	        23.28 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	51999920	        23.10 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	51681255	        24.13 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	53077480	        23.09 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	51423613	        23.11 ns/op
+BenchmarkGetMultiplierByUnitString_ShortDecimal-10                         	52453665	        23.97 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	52089738	        23.85 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	53329084	        22.87 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	51799024	        22.86 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	51829507	        22.71 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	52761072	        23.00 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	53643470	        22.67 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	52808570	        23.41 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	52955290	        22.82 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	53782516	        23.31 ns/op
+BenchmarkGetMultiplierByUnitStringNestedSwitchesVersion_ShortDecimal-10    	52115378	        22.79 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40319137	        30.30 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40798633	        29.97 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	39876548	        31.89 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40348227	        30.23 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40824195	        30.14 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40570749	        30.48 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40529414	        29.77 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40293696	        31.83 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40488732	        30.39 ns/op
+BenchmarkGetMultiplierByUnitStringMapVersion_ShortDecimal-10               	40760406	        29.84 ns/op
+PASS
+ok  	github.com/beauhoyt/bytesize	36.886s

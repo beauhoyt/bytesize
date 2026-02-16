@@ -144,7 +144,7 @@ func Parse(s string) (Bytes, error) {
 		return Bytes{}, fmt.Errorf("error parsing number and unit: %v", err)
 	}
 
-	multiplier, err := getMultiplierForUnitString(string(unitRunes))
+	multiplier, err := getMultiplierByUnitString(string(unitRunes))
 	if err != nil {
 		return Bytes{}, err
 	}
@@ -233,104 +233,59 @@ func getNumAndUnitRunes(s string) ([]rune, []rune, error) {
 	return numRunes, unitRunes, nil
 }
 
-// getMultiplierForUnitString returns the multiplier Bytes value corresponding
+// getMultiplierByUnitString returns the multiplier Bytes value corresponding
 // to the given unit string.
-func getMultiplierForUnitString(unitStr string) (Bytes, error) {
+func getMultiplierByUnitString(unitStr string) (Bytes, error) {
 	unitStr = strings.ToLower(strings.TrimSpace(unitStr))
-	// Check decimal units (short names first, then long names)
 	switch unitStr {
-	// Short unit names
-	// Decimal units
-	case "b":
+	// Base unit
+	case "b", "byte", "bytes":
 		return B, nil
-	case "kb":
+
+	// Decimal units
+	case "kb", "kilobyte", "kilobytes":
 		return KB, nil
-	case "mb":
+	case "mb", "megabyte", "megabytes":
 		return MB, nil
-	case "gb":
+	case "gb", "gigabyte", "gigabytes":
 		return GB, nil
-	case "tb":
+	case "tb", "terabyte", "terabytes":
 		return TB, nil
-	case "pb":
+	case "pb", "petabyte", "petabytes":
 		return PB, nil
-	case "eb":
+	case "eb", "exabyte", "exabytes":
 		return EB, nil
-	case "zb":
+	case "zb", "zettabyte", "zettabytes":
 		return ZB, nil
-	case "yb":
+	case "yb", "yottabyte", "yottabytes":
 		return YB, nil
-	case "rb":
+	case "rb", "ronnabyte", "ronnabytes":
 		return RB, nil
-	case "qb":
+	case "qb", "quettabyte", "quettabytes":
 		return QB, nil
 
 	// Binary units
-	case "kib":
+	case "kib", "kibibyte", "kibibytes":
 		return KiB, nil
-	case "mib":
+	case "mib", "mebibyte", "mebibytes":
 		return MiB, nil
-	case "gib":
+	case "gib", "gibibyte", "gibibytes":
 		return GiB, nil
-	case "tib":
+	case "tib", "tebibyte", "tebibytes":
 		return TiB, nil
-	case "pib":
+	case "pib", "pebibyte", "pebibytes":
 		return PiB, nil
-	case "eib":
+	case "eib", "exbibyte", "exbibytes":
 		return EiB, nil
-	case "zib":
+	case "zib", "zebibyte", "zebibytes":
 		return ZiB, nil
-	case "yib":
+	case "yib", "yobibyte", "yobibytes":
 		return YiB, nil
-	case "rib":
+	case "rib", "ronnibyte", "ronnibytes":
 		return RiB, nil
-	case "qib":
+	case "qib", "quettibyte", "quettibytes":
 		return QiB, nil
 
-	// Long decimal names
-	case "byte", "bytes":
-		return B, nil
-	case "kilobyte", "kilobytes":
-		return KB, nil
-	case "megabyte", "megabytes":
-		return MB, nil
-	case "gigabyte", "gigabytes":
-		return GB, nil
-	case "terabyte", "terabytes":
-		return TB, nil
-	case "petabyte", "petabytes":
-		return PB, nil
-	case "exabyte", "exabytes":
-		return EB, nil
-	case "zettabyte", "zettabytes":
-		return ZB, nil
-	case "yottabyte", "yottabytes":
-		return YB, nil
-	case "ronnabyte", "ronnabytes":
-		return RB, nil
-	case "quettabyte", "quettabytes":
-		return QB, nil
-
-	// Long binary names
-	case "kibibyte", "kibibytes":
-		return KiB, nil
-	case "mebibyte", "mebibytes":
-		return MiB, nil
-	case "gibibyte", "gibibytes":
-		return GiB, nil
-	case "tebibyte", "tebibytes":
-		return TiB, nil
-	case "pebibyte", "pebibytes":
-		return PiB, nil
-	case "exbibyte", "exbibytes":
-		return EiB, nil
-	case "zebibyte", "zebibytes":
-		return ZiB, nil
-	case "yobibyte", "yobibytes":
-		return YiB, nil
-	case "ronnibyte", "ronnibytes":
-		return RiB, nil
-	case "quettibyte", "quettibytes":
-		return QiB, nil
 	default:
 		return Bytes{}, fmt.Errorf("unknown unit: %s", unitStr)
 	}
@@ -375,10 +330,15 @@ type formatOptions struct {
 	decimalUnits bool
 }
 
-const (
+// These default options can be overridden by users of this package
+var (
 	// DefaultFormatStr is the default format string for formatting byte
 	// sizes, which includes two decimal places and the unit.
 	DefaultFormatStr = "%.2f %s"
+	// DefaultForcedUnitType is the default forced unit for formatting byte
+	// sizes, which is nil to indicate automatic unit selection based on the
+	// value.
+	DefaultForcedUnitType *Bytes
 	// DefaultLongUnits indicates whether to use long unit names, such
 	// as "Megabyte" instead of "MB", though the default is to use short unit
 	// names.
@@ -389,9 +349,10 @@ const (
 
 func newFormatOptions() *formatOptions {
 	return &formatOptions{
-		formatStr:    DefaultFormatStr,
-		longUnits:    DefaultLongUnits,
-		decimalUnits: DefaultDecimalUnits,
+		formatStr:      DefaultFormatStr,
+		forcedUnitType: DefaultForcedUnitType,
+		longUnits:      DefaultLongUnits,
+		decimalUnits:   DefaultDecimalUnits,
 	}
 }
 
@@ -478,43 +439,10 @@ func (b Bytes) format(opts ...FormatOption) (string, error) {
 	}
 
 	// Select the appropriate unit maps
-	var unitMap map[Bytes]string
-	var unitSlice []Bytes
-
-	if formatOptions.decimalUnits {
-		if formatOptions.longUnits {
-			unitMap = LongDecimal
-		} else {
-			unitMap = ShortDecimal
-		}
-		unitSlice = []Bytes{QB, RB, YB, ZB, EB, PB, TB, GB, MB, KB, B}
-	} else {
-		if formatOptions.longUnits {
-			unitMap = LongBinary
-		} else {
-			unitMap = ShortBinary
-		}
-		unitSlice = []Bytes{QiB, RiB, YiB, ZiB, EiB, PiB, TiB, GiB, MiB, KiB, B}
-	}
+	unitMap, unitSlice := getUnitMappings(formatOptions)
 
 	// Determine which unit to use
-	var bestUnit Bytes
-
-	if formatOptions.forcedUnitType != nil {
-		bestUnit = *formatOptions.forcedUnitType
-	} else {
-		// Find the best unit by finding the largest unit <= b
-		for _, unit := range unitSlice {
-			if Uint128(b).Cmp(Uint128(unit)) >= 0 {
-				bestUnit = unit
-				break
-			}
-		}
-		// If no unit was found (b is less than all units), use bytes
-		if bestUnit.Lo == 0 && bestUnit.Hi == 0 {
-			bestUnit = B
-		}
-	}
+	bestUnit := b.getBestUnitType(formatOptions, unitSlice)
 
 	// Calculate the value in the chosen unit using big.Float for precision
 	bBig := big.NewInt(0).SetUint64(Uint128(b).Lo)
@@ -551,4 +479,54 @@ func (b Bytes) format(opts ...FormatOption) (string, error) {
 	}
 
 	return fmt.Sprintf(formatOptions.formatStr, value, unitName), nil
+}
+
+// getUnitMappings returns the appropriate unit map and unit slice based on the
+// provided format options. It selects between decimal and binary units, as well
+// as long and short unit names, to ensure that the formatting uses the correct
+// units and names based on the user's preferences.
+func getUnitMappings(formatOptions *formatOptions) (unitMap map[Bytes]string, unitSlice []Bytes) {
+	if formatOptions.decimalUnits {
+		if formatOptions.longUnits {
+			unitMap = LongDecimal
+		} else {
+			unitMap = ShortDecimal
+		}
+		unitSlice = []Bytes{QB, RB, YB, ZB, EB, PB, TB, GB, MB, KB, B}
+	} else {
+		if formatOptions.longUnits {
+			unitMap = LongBinary
+		} else {
+			unitMap = ShortBinary
+		}
+		unitSlice = []Bytes{QiB, RiB, YiB, ZiB, EiB, PiB, TiB, GiB, MiB, KiB, B}
+	}
+
+	return unitMap, unitSlice
+}
+
+// getBestUnitType determines the best unit type to use for formatting the
+// Bytes value based on the provided format options and the value itself. If a
+// forced unit type is specified in the format options, it will use that unit
+// regardless of the value. Otherwise, it will find the largest unit that is
+// less than or equal to the Bytes value to ensure that the formatted output is
+// human-readable and appropriately scaled.
+func (b Bytes) getBestUnitType(formatOptions *formatOptions, unitSlice []Bytes) (bestUnit Bytes) {
+	if formatOptions.forcedUnitType != nil {
+		bestUnit = *formatOptions.forcedUnitType
+	} else {
+		// Find the best unit by finding the largest unit <= b
+		for _, unit := range unitSlice {
+			if Uint128(b).Cmp(Uint128(unit)) >= 0 {
+				bestUnit = unit
+				break
+			}
+		}
+		// If no unit was found (b is less than all units), use bytes
+		if bestUnit.Lo == 0 && bestUnit.Hi == 0 {
+			bestUnit = B
+		}
+	}
+
+	return bestUnit
 }
