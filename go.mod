@@ -1,6 +1,6 @@
 module github.com/beauhoyt/bytesize
 
-go 1.26.0
+go 1.24.13
 
 tool (
 	github.com/beauhoyt/bytesize
