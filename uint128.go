@@ -35,6 +35,11 @@ func (u Uint128) Equals(v Uint128) bool {
 	return u == v
 }
 
+// EqualsBytes returns true if u == v.
+func (u Uint128) EqualsBytes(v Bytes) bool {
+	return u.Hi == v.Hi && u.Lo == v.Lo
+}
+
 // Equals64 returns true if u == v.
 func (u Uint128) Equals64(v uint64) bool {
 	return u.Lo == v && u.Hi == 0
@@ -49,6 +54,25 @@ func (u Uint128) Cmp(v Uint128) int {
 	if u == v {
 		return 0
 	} else if u.Hi < v.Hi || (u.Hi == v.Hi && u.Lo < v.Lo) {
+		return -1
+	}
+	return 1
+}
+
+// CmpBytes compares u and v and returns:
+//
+//	-1 if u <  v
+//	 0 if u == v
+//	+1 if u >  v
+func (u Uint128) CmpBytes(v Bytes) int {
+	if u.Hi == v.Hi {
+		if u.Lo == v.Lo {
+			return 0
+		} else if u.Lo < v.Lo {
+			return -1
+		}
+		return 1
+	} else if u.Hi < v.Hi {
 		return -1
 	}
 	return 1
@@ -73,6 +97,11 @@ func (u Uint128) And(v Uint128) Uint128 {
 	return Uint128{u.Lo & v.Lo, u.Hi & v.Hi}
 }
 
+// AndBytes returns u&v.
+func (u Uint128) AndBytes(v Bytes) Uint128 {
+	return Uint128{u.Lo & v.Lo, u.Hi & v.Hi}
+}
+
 // And64 returns u&v.
 func (u Uint128) And64(v uint64) Uint128 {
 	return Uint128{u.Lo & v, 0}
@@ -83,6 +112,11 @@ func (u Uint128) Or(v Uint128) Uint128 {
 	return Uint128{u.Lo | v.Lo, u.Hi | v.Hi}
 }
 
+// OrBytes returns u|v.
+func (u Uint128) OrBytes(v Bytes) Uint128 {
+	return Uint128{u.Lo | v.Lo, u.Hi | v.Hi}
+}
+
 // Or64 returns u|v.
 func (u Uint128) Or64(v uint64) Uint128 {
 	return Uint128{u.Lo | v, u.Hi}
@@ -90,6 +124,11 @@ func (u Uint128) Or64(v uint64) Uint128 {
 
 // Xor returns u^v.
 func (u Uint128) Xor(v Uint128) Uint128 {
+	return Uint128{u.Lo ^ v.Lo, u.Hi ^ v.Hi}
+}
+
+// XorBytes returns u^v.
+func (u Uint128) XorBytes(v Bytes) Uint128 {
 	return Uint128{u.Lo ^ v.Lo, u.Hi ^ v.Hi}
 }
 
@@ -126,6 +165,34 @@ func (u Uint128) AddWrap(v Uint128) Uint128 {
 	return Uint128{lo, hi}
 }
 
+// AddBytes returns u+v. It panics on overflow.
+func (u Uint128) AddBytes(v Bytes) Uint128 {
+	lo, carry := bits.Add64(u.Lo, v.Lo, 0)
+	hi, carry := bits.Add64(u.Hi, v.Hi, carry)
+	if carry != 0 {
+		panic("add: overflow: u=" + u.String() + ", v=" + v.String())
+	}
+	return Uint128{lo, hi}
+}
+
+// AddBytesErr returns u+v, returning an error on overflow.
+func (u Uint128) AddBytesErr(v Bytes) (Uint128, error) {
+	lo, carry := bits.Add64(u.Lo, v.Lo, 0)
+	hi, carry := bits.Add64(u.Hi, v.Hi, carry)
+	if carry != 0 {
+		return Uint128{}, fmt.Errorf("add: overflow: u=%s, v=%s", u.String(), v.String())
+	}
+	return Uint128{lo, hi}, nil
+}
+
+// AddWrapBytes returns u+v with wraparound semantics; for example,
+// Max.AddWrapBytes(Bytes{1,0})) == Zero.
+func (u Uint128) AddWrapBytes(v Bytes) Uint128 {
+	lo, carry := bits.Add64(u.Lo, v.Lo, 0)
+	hi, _ := bits.Add64(u.Hi, v.Hi, carry)
+	return Uint128{lo, hi}
+}
+
 // Add64 returns u+v.
 func (u Uint128) Add64(v uint64) Uint128 {
 	lo, carry := bits.Add64(u.Lo, v, 0)
@@ -154,7 +221,7 @@ func (u Uint128) AddWrap64(v uint64) Uint128 {
 	return Uint128{lo, hi}
 }
 
-// Sub returns u-v.
+// Sub returns u-v. It panics on underflow.
 func (u Uint128) Sub(v Uint128) Uint128 {
 	lo, borrow := bits.Sub64(u.Lo, v.Lo, 0)
 	hi, borrow := bits.Sub64(u.Hi, v.Hi, borrow)
@@ -182,7 +249,35 @@ func (u Uint128) SubWrap(v Uint128) Uint128 {
 	return Uint128{lo, hi}
 }
 
-// Sub64 returns u-v.
+// SubBytes returns u-v. It panics on underflow.
+func (u Uint128) SubBytes(v Bytes) Uint128 {
+	lo, borrow := bits.Sub64(u.Lo, v.Lo, 0)
+	hi, borrow := bits.Sub64(u.Hi, v.Hi, borrow)
+	if borrow != 0 {
+		panic("sub: underflow: u=" + u.String() + ", v=" + v.String())
+	}
+	return Uint128{lo, hi}
+}
+
+// SubBytesErr returns u-v, returning an error on underflow.
+func (u Uint128) SubBytesErr(v Bytes) (Uint128, error) {
+	lo, borrow := bits.Sub64(u.Lo, v.Lo, 0)
+	hi, borrow := bits.Sub64(u.Hi, v.Hi, borrow)
+	if borrow != 0 {
+		return Uint128{}, fmt.Errorf("sub: underflow: u=%s, v=%s", u.String(), v.String())
+	}
+	return Uint128{lo, hi}, nil
+}
+
+// SubWrapBytes returns u-v with wraparound semantics; for example,
+// Zero.SubWrapBytes(Bytes{1,0}) == Max.
+func (u Uint128) SubWrapBytes(v Bytes) Uint128 {
+	lo, borrow := bits.Sub64(u.Lo, v.Lo, 0)
+	hi, _ := bits.Sub64(u.Hi, v.Hi, borrow)
+	return Uint128{lo, hi}
+}
+
+// Sub64 returns u-v. It panics on underflow.
 func (u Uint128) Sub64(v uint64) Uint128 {
 	lo, borrow := bits.Sub64(u.Lo, v, 0)
 	hi, borrow := bits.Sub64(u.Hi, 0, borrow)
@@ -244,6 +339,40 @@ func (u Uint128) MulWrap(v Uint128) Uint128 {
 	return Uint128{lo, hi}
 }
 
+// MulBytes returns u*v, panicking on overflow.
+func (u Uint128) MulBytes(v Bytes) Uint128 {
+	hi, lo := bits.Mul64(u.Lo, v.Lo)
+	p0, p1 := bits.Mul64(u.Hi, v.Lo)
+	p2, p3 := bits.Mul64(u.Lo, v.Hi)
+	hi, c0 := bits.Add64(hi, p1, 0)
+	hi, c1 := bits.Add64(hi, p3, c0)
+	if (u.Hi != 0 && v.Hi != 0) || p0 != 0 || p2 != 0 || c1 != 0 {
+		panic("mul: overflow: u=" + u.String() + ", v=" + v.String())
+	}
+	return Uint128{lo, hi}
+}
+
+// MulBytesErr returns u*v, returning an error on overflow.
+func (u Uint128) MulBytesErr(v Bytes) (Uint128, error) {
+	hi, lo := bits.Mul64(u.Lo, v.Lo)
+	p0, p1 := bits.Mul64(u.Hi, v.Lo)
+	p2, p3 := bits.Mul64(u.Lo, v.Hi)
+	hi, c0 := bits.Add64(hi, p1, 0)
+	hi, c1 := bits.Add64(hi, p3, c0)
+	if (u.Hi != 0 && v.Hi != 0) || p0 != 0 || p2 != 0 || c1 != 0 {
+		return Uint128{}, fmt.Errorf("mul: overflow: u=%s, v=%s", u.String(), v.String())
+	}
+	return Uint128{lo, hi}, nil
+}
+
+// MulWrapBytes returns u*v with wraparound semantics; for example,
+// Max.MulWrapBytes(Bytes{1,0}) == Max.
+func (u Uint128) MulWrapBytes(v Bytes) Uint128 {
+	hi, lo := bits.Mul64(u.Lo, v.Lo)
+	hi += u.Hi*v.Lo + u.Lo*v.Hi
+	return Uint128{lo, hi}
+}
+
 // Mul64 returns u*v, panicking on overflow.
 func (u Uint128) Mul64(v uint64) Uint128 {
 	hi, lo := bits.Mul64(u.Lo, v)
@@ -287,6 +416,12 @@ func (u Uint128) Div(v Uint128) Uint128 {
 	return q
 }
 
+// DivBytes returns u/v.
+func (u Uint128) DivBytes(v Bytes) Uint128 {
+	q, _ := u.QuoRemBytes(v)
+	return q
+}
+
 // Div64 returns u/v.
 func (u Uint128) Div64(v uint64) Uint128 {
 	q, _ := u.QuoRem64(v)
@@ -322,6 +457,35 @@ func (u Uint128) QuoRem(v Uint128) (q, r Uint128) {
 	return
 }
 
+// QuoRemBytes returns q = u/v and r = u%v.
+func (u Uint128) QuoRemBytes(v Bytes) (q, r Uint128) {
+	if v.Hi == 0 {
+		var r64 uint64
+		q, r64 = u.QuoRem64(v.Lo)
+		r = From64(r64)
+	} else {
+		// generate a "trial quotient," guaranteed to be within 1 of the actual
+		// quotient, then adjust.
+		n := uint(bits.LeadingZeros64(v.Hi))
+		v1 := Uint128(v).Lsh(n)
+		u1 := u.Rsh(1)
+		tq, _ := bits.Div64(u1.Hi, u1.Lo, v1.Hi)
+		tq >>= 63 - n
+		if tq != 0 {
+			tq--
+		}
+		q = From64(tq)
+		// calculate remainder using trial quotient, then adjust if remainder is
+		// greater than divisor
+		r = u.Sub(Uint128(v).Mul64(tq))
+		if r.CmpBytes(v) >= 0 {
+			q = q.Add64(1)
+			r = r.SubBytes(v)
+		}
+	}
+	return
+}
+
 // QuoRem64 returns q = u/v and r = u%v.
 func (u Uint128) QuoRem64(v uint64) (q Uint128, r uint64) {
 	if u.Hi < v {
@@ -336,6 +500,12 @@ func (u Uint128) QuoRem64(v uint64) (q Uint128, r uint64) {
 // Mod returns r = u%v.
 func (u Uint128) Mod(v Uint128) (r Uint128) {
 	_, r = u.QuoRem(v)
+	return
+}
+
+// ModBytes returns r = u%v.
+func (u Uint128) ModBytes(v Bytes) (r Uint128) {
+	_, r = u.QuoRemBytes(v)
 	return
 }
 

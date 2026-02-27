@@ -42,7 +42,10 @@ func TestUint128(t *testing.T) {
 		}
 
 		if !x.Equals(x) {
-			t.Fatalf("%v does not equal itself", x.Lo)
+			t.Fatalf("%v does not equal itself", x)
+		}
+		if !x.EqualsBytes(Bytes(x)) {
+			t.Fatalf("%v does not equal itself", x)
 		}
 		if !From64(x.Lo).Equals64(x.Lo) {
 			t.Fatalf("%v does not equal itself", x.Lo)
@@ -51,6 +54,12 @@ func TestUint128(t *testing.T) {
 		if x.Cmp(y) != x.Big().Cmp(y.Big()) {
 			t.Fatalf("mismatch: cmp(%v,%v) should equal %v, got %v", x, y, x.Big().Cmp(y.Big()), x.Cmp(y))
 		} else if x.Cmp(x) != 0 {
+			t.Fatalf("%v does not equal itself", x)
+		}
+
+		if x.CmpBytes(Bytes(y)) != x.Big().Cmp(y.Big()) {
+			t.Fatalf("mismatch: cmpBytes(%v,%v) should equal %v, got %v", x, y, x.Big().Cmp(y.Big()), x.CmpBytes(Bytes(y)))
+		} else if x.CmpBytes(Bytes(x)) != 0 {
 			t.Fatalf("%v does not equal itself", x)
 		}
 
@@ -126,6 +135,31 @@ func TestArithmetic(t *testing.T) {
 			t.Fatalf("mismatch: %v %v %v should equal %v, got %v", x, op, y, rb, r)
 		}
 	}
+	checkBinOpXByte := func(x Uint128, op string, y Bytes, fn func(x Uint128, y Bytes) Uint128, fnb func(z, x, y *big.Int) *big.Int) {
+		t.Helper()
+		rb := fnb(new(big.Int), x.Big(), Uint128(y).Big())
+		defer func() {
+			if r := recover(); r != nil {
+				if rb.BitLen() <= 128 && rb.Sign() >= 0 {
+					t.Fatalf("mismatch: %v %v %v should not panic, %v", x, op, y, rb)
+				}
+			} else if rb.BitLen() > 128 || rb.Sign() < 0 {
+				t.Fatalf("mismatch: %v %v %v should panic, %v", x, op, y, rb)
+			}
+		}()
+		r := fn(x, y)
+		if r.Big().Cmp(rb) != 0 {
+			t.Fatalf("mismatch: %v %v %v should equal %v, got %v", x, op, y, rb, r)
+		}
+	}
+	checkBinOpByte := func(x Uint128, op string, y Bytes, fn func(x Uint128, y Bytes) Uint128, fnb func(z, x, y *big.Int) *big.Int) {
+		t.Helper()
+		r := fn(x, y)
+		rb := mod128(fnb(new(big.Int), x.Big(), Uint128(y).Big()))
+		if r.Big().Cmp(rb) != 0 {
+			t.Fatalf("mismatch: %v %v %v should equal %v, got %v", x, op, y, rb, r)
+		}
+	}
 	checkBinOp := func(x Uint128, op string, y Uint128, fn func(x, y Uint128) Uint128, fnb func(z, x, y *big.Int) *big.Int) {
 		t.Helper()
 		r := fn(x, y)
@@ -174,16 +208,27 @@ func TestArithmetic(t *testing.T) {
 		checkBinOpX(x, "[+]", y, Uint128.Add, (*big.Int).Add)
 		checkBinOpX(x, "[-]", y, Uint128.Sub, (*big.Int).Sub)
 		checkBinOpX(x, "[*]", y, Uint128.Mul, (*big.Int).Mul)
+		checkBinOpXByte(x, "[+]", Bytes(y), Uint128.AddBytes, (*big.Int).Add)
+		checkBinOpXByte(x, "[-]", Bytes(y), Uint128.SubBytes, (*big.Int).Sub)
+		checkBinOpXByte(x, "[*]", Bytes(y), Uint128.MulBytes, (*big.Int).Mul)
 		checkBinOp(x, "+", y, Uint128.AddWrap, (*big.Int).Add)
 		checkBinOp(x, "-", y, Uint128.SubWrap, (*big.Int).Sub)
 		checkBinOp(x, "*", y, Uint128.MulWrap, (*big.Int).Mul)
+		checkBinOpByte(x, "+", Bytes(y), Uint128.AddWrapBytes, (*big.Int).Add)
+		checkBinOpByte(x, "-", Bytes(y), Uint128.SubWrapBytes, (*big.Int).Sub)
+		checkBinOpByte(x, "*", Bytes(y), Uint128.MulWrapBytes, (*big.Int).Mul)
 		if !y.IsZero() {
 			checkBinOp(x, "/", y, Uint128.Div, (*big.Int).Div)
 			checkBinOp(x, "%", y, Uint128.Mod, (*big.Int).Mod)
+			checkBinOpByte(x, "/", Bytes(y), Uint128.DivBytes, (*big.Int).Div)
+			checkBinOpByte(x, "%", Bytes(y), Uint128.ModBytes, (*big.Int).Mod)
 		}
 		checkBinOp(x, "&", y, Uint128.And, (*big.Int).And)
 		checkBinOp(x, "|", y, Uint128.Or, (*big.Int).Or)
 		checkBinOp(x, "^", y, Uint128.Xor, (*big.Int).Xor)
+		checkBinOpByte(x, "&", Bytes(y), Uint128.AndBytes, (*big.Int).And)
+		checkBinOpByte(x, "|", Bytes(y), Uint128.OrBytes, (*big.Int).Or)
+		checkBinOpByte(x, "^", Bytes(y), Uint128.XorBytes, (*big.Int).Xor)
 		checkShiftOp(x, "<<", z, Uint128.Lsh, (*big.Int).Lsh)
 		checkShiftOp(x, ">>", z, Uint128.Rsh, (*big.Int).Rsh)
 
@@ -244,6 +289,27 @@ func TestArithmeticErrors(t *testing.T) {
 			t.Fatalf("mismatch: %v %v %v should equal %v, got %v", x, op, y, rb, r)
 		}
 	}
+	checkBinOpXByteErr := func(x Uint128, op string, y Bytes, fn func(x Uint128, y Bytes) (Uint128, error), fnb func(z, x, y *big.Int) *big.Int) {
+		t.Helper()
+		rb := fnb(new(big.Int), x.Big(), Uint128(y).Big())
+		shouldError := false
+		if rb.BitLen() > 128 || rb.Sign() < 0 {
+			shouldError = true
+		}
+		r, err := fn(x, y)
+		if shouldError {
+			if err == nil {
+				t.Fatalf("mismatch: %v %v %v should error, got %v", x, op, y, r)
+			}
+			return
+		}
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if r.Big().Cmp(rb) != 0 {
+			t.Fatalf("mismatch: %v %v %v should equal %v, got %v", x, op, y, rb, r)
+		}
+	}
 	checkBinOp64XErr := func(x Uint128, op string, y uint64, fn func(x Uint128, y uint64) (Uint128, error), fnb func(z, x, y *big.Int) *big.Int) {
 		t.Helper()
 		xb, yb := x.Big(), From64(y).Big()
@@ -271,6 +337,9 @@ func TestArithmeticErrors(t *testing.T) {
 		checkBinOpXErr(x, "[+]", y, Uint128.AddErr, (*big.Int).Add)
 		checkBinOpXErr(x, "[-]", y, Uint128.SubErr, (*big.Int).Sub)
 		checkBinOpXErr(x, "[*]", y, Uint128.MulErr, (*big.Int).Mul)
+		checkBinOpXByteErr(x, "[+]", Bytes(y), Uint128.AddBytesErr, (*big.Int).Add)
+		checkBinOpXByteErr(x, "[-]", Bytes(y), Uint128.SubBytesErr, (*big.Int).Sub)
+		checkBinOpXByteErr(x, "[*]", Bytes(y), Uint128.MulBytesErr, (*big.Int).Mul)
 		// check 64-bit variants
 		y64 := y.Lo
 		checkBinOp64XErr(x, "[+]", y64, Uint128.Add64Err, (*big.Int).Add)
