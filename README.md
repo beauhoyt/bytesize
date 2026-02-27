@@ -1,7 +1,7 @@
 # ByteSize
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/beauhoyt/bytesize.svg)](https://pkg.go.dev/github.com/beauhoyt/bytesize)
-[![Go](https://github.com/beauhoyt/bytesize/actions/workflows/coveralls.yml/badge.svg)](https://github.com/beauhoyt/bytesize/actions/workflows/coveralls.yml)
+[![Go](https://github.com/beauhoyt/bytesize/actions/workflows/golang.yml/badge.svg)](https://github.com/beauhoyt/bytesize/actions/workflows/golang.yml)
 [![Coverage Status](https://coveralls.io/repos/github/beauhoyt/bytesize/badge.svg?branch=v0.3.0)](https://coveralls.io/github/beauhoyt/bytesize?branch=v0.3.0)
 [![Go Report Card](https://goreportcard.com/badge/github.com/beauhoyt/bytesize)](https://goreportcard.com/report/github.com/beauhoyt/bytesize)
 
