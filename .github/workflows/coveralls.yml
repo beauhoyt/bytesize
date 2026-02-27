@@ -1,4 +1,4 @@
-name: Test Coveralls
+name: Golang CI
 on:
   push:
     tags: [v*.*.*]
@@ -7,8 +7,14 @@ on:
     branches: [master]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  test-coverage:
+    strategy:
+      matrix:
+        go-version: [1.24.x, 1.25.x, 1.26.x]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CGO_ENABLED: 0
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -16,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.26.0
+          go-version: ${{ matrix.go-version }}
 
       - name: Install dependencies
         run: go mod tidy
@@ -30,3 +36,29 @@ jobs:
         uses: coverallsapp/github-action@v2.3.6
         with:
           file: coverage.out
+
+  fuzzing:
+    strategy:
+      matrix:
+        go-version: [1.24.x, 1.25.x, 1.26.x]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CGO_ENABLED: 0
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Run FuzzParse
+        run: go test -v -fuzz=FuzzParse -fuzztime=30s ./...
+
+      - name: Run FuzzFormat
+        run: go test -v -fuzz=FuzzFormat -fuzztime=30s ./...
