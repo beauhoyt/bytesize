@@ -31,9 +31,13 @@ jobs:
         run: go test -v ./...
 
       - name: Run Race 1 CPU
+        env:
+          CGO_ENABLED: 1
         run: go test -v -cpu=1 -short -race ./...
 
       - name: Run Race 4 CPU
+        env:
+          CGO_ENABLED: 1
         run: go test -v -cpu=4 -short -race ./...
 
   coverage:
